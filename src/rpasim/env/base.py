@@ -17,7 +17,7 @@ class DifferentiableEnv:
     def __init__(
         self,
         initial_ode: ODE,
-        reward_fn: Callable[[torch.Tensor], float],
+        reward_fn: Callable[[torch.Tensor], torch.Tensor],
         initial_state: torch.Tensor,
         time_horizon: float,
         n_reward_steps: int,
@@ -127,13 +127,13 @@ class DifferentiableEnv:
         self.time_segments.append(grid_points)
 
         # Compute rewards for grid points only
-        rewards = torch.tensor([self.reward_fn(state) for state in grid_traj])
+        rewards = torch.stack([self.reward_fn(state) for state in grid_traj])
 
         # Append reward segment
         self.reward_segments.append(rewards)
 
-        # Return sum of rewards
-        reward = rewards.sum().item()
+        # Return sum of rewards (as tensor for gradient computation)
+        reward = rewards.sum()
 
         # Return observation as (ODE copy, state)
         observation = (deepcopy(self.current_ode), self.current_state.clone())
