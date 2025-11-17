@@ -29,11 +29,22 @@ def plot_env_trajectory(env, figsize: tuple = (6, 2)):
     for i in range(n_vars):
         axes[i].plot(times.detach().numpy(), states[:, i].detach().numpy())
         axes[i].set_xlabel("time")
-        axes[i].set_ylabel(f"x{i}")
+
+        # Use variable name from ODE if available, otherwise use x{i}
+        if (
+            hasattr(env, "current_ode")
+            and hasattr(env.current_ode, "variable_names")
+            and len(env.current_ode.variable_names) == n_vars
+        ):
+            ylabel = env.current_ode.variable_names[i]
+        else:
+            ylabel = f"x{i}"
+        axes[i].set_ylabel(ylabel)
+
         sns.despine(ax=axes[i])
 
     # Plot rewards on the last axis
-    axes[-1].plot(times.detach().numpy(), rewards.detach().numpy())
+    axes[-1].plot(times.detach().numpy(), rewards.detach().numpy(), color="red")
     axes[-1].set_xlabel("time")
     axes[-1].set_ylabel("reward")
     sns.despine(ax=axes[-1])

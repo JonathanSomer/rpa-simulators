@@ -43,7 +43,14 @@ def plot_trajectory(
     for i, ax in enumerate(axes):
         ax.plot(t.numpy(), trajectory[:, i].detach().numpy())
         ax.set_xlabel("time")
-        ax.set_ylabel(f"x{i}")
+
+        # Use variable name from ODE if available, otherwise use x{i}
+        if hasattr(ode, "variable_names") and len(ode.variable_names) == n_vars:
+            ylabel = ode.variable_names[i]
+        else:
+            ylabel = f"x{i}"
+        ax.set_ylabel(ylabel)
+
         sns.despine(ax=ax)
 
     plt.tight_layout()

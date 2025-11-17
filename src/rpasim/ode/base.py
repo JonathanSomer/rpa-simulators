@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 import torch
 
 
@@ -8,7 +8,12 @@ class ODE(ABC):
 
     All inputs and outputs are PyTorch tensors.
     Subclasses must implement the forward() method to compute dx/dt.
+
+    Attributes:
+        variable_names: List of variable names (e.g., ["A", "B"])
     """
+
+    variable_names: List[str] = []
 
     def __init__(
         self,

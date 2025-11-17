@@ -17,6 +17,8 @@ class AB(ODE):
         x: [A, B]
     """
 
+    variable_names = ["A", "B"]
+
     def forward(
         self,
         t: torch.Tensor,
