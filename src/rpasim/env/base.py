@@ -138,8 +138,8 @@ class DifferentiableEnv:
         # Return observation as (ODE copy, state)
         observation = (deepcopy(self.current_ode), self.current_state.clone())
 
-        # For now, episodes never terminate
-        terminated = False
+        # Check if we've reached or passed the time horizon
+        terminated = self.current_time >= self.time_horizon
         truncated = False
         info = {}
 
