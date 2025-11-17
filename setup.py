@@ -17,5 +17,6 @@ setup(
         "statsmodels",
         "fire",
         "torchdiffeq",
+        "pytest",
     ],
 )
