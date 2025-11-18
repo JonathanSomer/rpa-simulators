@@ -4,6 +4,15 @@ from torchdiffeq import odeint
 from rpasim.ode import AB
 
 
+def test_ab_parameter_names():
+    """Test that AB ODE has correct parameter names defined."""
+    ab_ode = AB()
+
+    assert ab_ode.variable_names == ["A", "B"]
+    assert ab_ode.differentiable_param_names == ["alpha1", "alpha2", "alpha3"]
+    assert ab_ode.fixed_param_names == ["beta1", "beta2"]
+
+
 def test_ab_steady_state():
     """Test that AB ODE reaches steady state where x1 = 1/abs(alpha3)"""
     # Parameters

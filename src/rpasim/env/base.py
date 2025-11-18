@@ -79,7 +79,7 @@ class DifferentiableEnv:
         reward_fn: Callable[[torch.Tensor], torch.Tensor],
         initial_state: torch.Tensor,
         time_horizon: float,
-        n_reward_steps: int,
+        n_reward_steps: int = 1000,
         state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     ):
         """Initialize the differentiable environment.

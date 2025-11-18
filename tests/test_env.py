@@ -21,6 +21,10 @@ class ConstantODE(ODE):
         """Return constant derivative."""
         return torch.tensor([self.c])
 
+    def __str__(self) -> str:
+        """Return string representation."""
+        return f"ConstantODE(c={self.c})"
+
 
 def test_state_limit_truncation():
     """Test that state limits trigger truncation with correct reward."""

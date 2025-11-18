@@ -10,10 +10,16 @@ class ODE(ABC):
     Subclasses must implement the forward() method to compute dx/dt.
 
     Attributes:
+        name: Human-readable name of the ODE system
         variable_names: List of variable names (e.g., ["A", "B"])
+        differentiable_param_names: List of differentiable parameter names
+        fixed_param_names: List of fixed parameter names
     """
 
+    name: str = "ODE"
     variable_names: List[str] = []
+    differentiable_param_names: List[str] = []
+    fixed_param_names: List[str] = []
 
     def __init__(
         self,
@@ -57,6 +63,15 @@ class ODE(ABC):
             dx/dt tensor
         """
         pass
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return string representation with equations and parameters."""
+        pass
+
+    def __repr__(self) -> str:
+        """Return string representation (calls __str__)."""
+        return self.__str__()
 
     def __call__(
         self,

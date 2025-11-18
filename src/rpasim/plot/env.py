@@ -50,4 +50,5 @@ def plot_env_trajectory(env, figsize: tuple = (6, 2)):
     sns.despine(ax=axes[-1])
 
     plt.tight_layout()
+
     return fig, axes
