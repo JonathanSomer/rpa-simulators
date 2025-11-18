@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Optional
 from rpasim.ode import ODE
+from rpasim.style import set_style, LINEPLOT_WIDTH
 
 
 def plot_trajectory(
@@ -25,6 +26,8 @@ def plot_trajectory(
     Returns:
         fig, axes: Figure and axes objects
     """
+    set_style()
+
     # Create time points
     t = torch.linspace(0, T, n_steps)
 
@@ -41,7 +44,7 @@ def plot_trajectory(
 
     # Plot each state variable on its own axis
     for i, ax in enumerate(axes):
-        ax.plot(t.numpy(), trajectory[:, i].detach().numpy())
+        ax.plot(t.numpy(), trajectory[:, i].detach().numpy(), linewidth=LINEPLOT_WIDTH)
         ax.set_xlabel("time")
 
         # Use variable name from ODE if available, otherwise use x{i}

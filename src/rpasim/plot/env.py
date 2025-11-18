@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Optional
+from rpasim.style import set_style, LINEPLOT_WIDTH
 
 
 def plot_env_trajectory(env, figsize: tuple = (6, 2)):
@@ -13,6 +14,8 @@ def plot_env_trajectory(env, figsize: tuple = (6, 2)):
     Returns:
         fig, axes: Figure and axes objects
     """
+    set_style()
+
     # Get full trajectory
     times, states, rewards = env.get_trajectory()
 
@@ -27,7 +30,7 @@ def plot_env_trajectory(env, figsize: tuple = (6, 2)):
 
     # Plot each state variable on its own axis
     for i in range(n_vars):
-        axes[i].plot(times.detach().numpy(), states[:, i].detach().numpy())
+        axes[i].plot(times.detach().numpy(), states[:, i].detach().numpy(), linewidth=LINEPLOT_WIDTH)
         axes[i].set_xlabel("time")
 
         # Use variable name from ODE if available, otherwise use x{i}
@@ -43,8 +46,9 @@ def plot_env_trajectory(env, figsize: tuple = (6, 2)):
 
         sns.despine(ax=axes[i])
 
-    # Plot rewards on the last axis
-    axes[-1].plot(times.detach().numpy(), rewards.detach().numpy(), color="red")
+    # Plot rewards on the last axis (use color from different region of palette)
+    reward_color = sns.color_palette("plasma", 8)[6]  # Yellow/bright end of plasma
+    axes[-1].plot(times.detach().numpy(), rewards.detach().numpy(), linewidth=LINEPLOT_WIDTH, color=reward_color)
     axes[-1].set_xlabel("time")
     axes[-1].set_ylabel("reward")
     sns.despine(ax=axes[-1])
