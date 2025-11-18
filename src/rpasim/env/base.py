@@ -1,8 +1,67 @@
 import torch
-from typing import Callable, Tuple, Dict
+from typing import Callable, Tuple, Dict, Optional, Union, List
 from copy import deepcopy
 from torchdiffeq import odeint
 from rpasim.ode import ODE
+
+
+def _process_state_limits(
+    state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]],
+    n_vars: int,
+) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
+    """Process state limits into normalized format.
+
+    Args:
+        state_limits: Single tuple (lower, upper) or list of tuples per variable
+        n_vars: Number of state variables
+
+    Returns:
+        Tuple of (lower_bounds, upper_bounds) tensors, or None
+    """
+    if state_limits is None:
+        return None
+
+    if isinstance(state_limits, tuple):
+        # Single tuple: apply to all variables
+        lower_bounds = torch.full((n_vars,), float(state_limits[0]))
+        upper_bounds = torch.full((n_vars,), float(state_limits[1]))
+    else:
+        # List of tuples: one per variable
+        assert len(state_limits) == n_vars, f"Expected {n_vars} limit tuples, got {len(state_limits)}"
+        lower_bounds = torch.tensor([lim[0] for lim in state_limits], dtype=torch.float)
+        upper_bounds = torch.tensor([lim[1] for lim in state_limits], dtype=torch.float)
+
+    return (lower_bounds, upper_bounds)
+
+
+def _check_state_limits(
+    traj: torch.Tensor,
+    state_limits: Optional[Tuple[torch.Tensor, torch.Tensor]],
+) -> Optional[int]:
+    """Check if trajectory violates state limits.
+
+    Args:
+        traj: Trajectory tensor of shape (n_steps, n_vars)
+        state_limits: Tuple of (lower_bounds, upper_bounds)
+
+    Returns:
+        Index of first violation, or None if no violation
+    """
+    if state_limits is None:
+        return None
+
+    lower_bounds, upper_bounds = state_limits
+
+    # Check if any state violates bounds at each time step
+    below_lower = (traj < lower_bounds).any(dim=1)
+    above_upper = (traj > upper_bounds).any(dim=1)
+    violations = below_lower | above_upper
+
+    if violations.any():
+        # Return index of first violation
+        return violations.nonzero()[0].item()
+
+    return None
 
 
 class DifferentiableEnv:
@@ -21,6 +80,7 @@ class DifferentiableEnv:
         initial_state: torch.Tensor,
         time_horizon: float,
         n_reward_steps: int,
+        state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     ):
         """Initialize the differentiable environment.
 
@@ -30,6 +90,9 @@ class DifferentiableEnv:
             initial_state: Initial state tensor
             time_horizon: Maximum time for the environment
             n_reward_steps: Number of steps for reward computation grid
+            state_limits: Optional limits for state variables. Can be:
+                - Single tuple (lower, upper) applied to all variables
+                - List of tuples, one per variable
         """
         self.initial_ode = initial_ode
         self.reward_fn = reward_fn
@@ -37,6 +100,7 @@ class DifferentiableEnv:
         self.time_horizon = time_horizon
         self.n_reward_steps = n_reward_steps
         self.reward_dt = time_horizon / n_reward_steps
+        self.state_limits = _process_state_limits(state_limits, len(initial_state))
 
         # Precompute reward grid
         self.reward_grid = torch.arange(0, time_horizon + self.reward_dt, self.reward_dt)
@@ -110,15 +174,35 @@ class DifferentiableEnv:
         # Simulate using torchdiffeq
         traj = odeint(self.current_ode, self.current_state, t, method="rk4")
 
-        # Update state to final point (at end_time)
-        self.current_state = traj[-1]
+        # Check for state limit violations
+        violation_idx = _check_state_limits(traj, self.state_limits)
 
-        # Update current time
-        self.current_time = end_time
+        if violation_idx is None:
+            # No violation: proceed normally
+            self.current_state = traj[-1]
+            self.current_time = end_time
+            n_grid_points = len(grid_points)
+            grid_traj = traj[:n_grid_points]
+            truncated = False
+            remaining_grid_points = 0
+        else:
+            # Truncate trajectory at violation point
+            traj = traj[: violation_idx + 1]
+            n_grid_points = min(violation_idx + 1, len(grid_points))
+            grid_traj = traj[:n_grid_points]
+            grid_points = grid_points[:n_grid_points]
 
-        # Extract states at grid points only (exclude end_time if it's not on grid)
-        n_grid_points = len(grid_points)
-        grid_traj = traj[:n_grid_points]
+            # Update state and time to violation point
+            self.current_state = traj[-1]
+            self.current_time = self.current_time + t[violation_idx]
+
+            # Count remaining grid points from violation time to time horizon
+            # Use > not >= because we already sampled the point at current_time
+            remaining_grid_points = (
+                (self.reward_grid > self.current_time)
+                & (self.reward_grid <= self.time_horizon)
+            ).sum().item()
+            truncated = True
 
         # Append trajectory segment (grid points only)
         self.trajectory_segments.append(grid_traj)
@@ -128,6 +212,12 @@ class DifferentiableEnv:
 
         # Compute rewards for grid points only
         rewards = torch.stack([self.reward_fn(state) for state in grid_traj])
+
+        # If truncated, add penalty for remaining grid points to horizon
+        if truncated and remaining_grid_points > 0:
+            final_reward = self.reward_fn(self.current_state)
+            penalty = final_reward * remaining_grid_points
+            rewards = torch.cat([rewards, penalty.unsqueeze(0)])
 
         # Append reward segment
         self.reward_segments.append(rewards)
@@ -140,7 +230,6 @@ class DifferentiableEnv:
 
         # Check if we've reached or passed the time horizon
         terminated = self.current_time >= self.time_horizon
-        truncated = False
         info = {}
 
         return observation, reward, terminated, truncated, info
