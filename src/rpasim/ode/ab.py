@@ -96,11 +96,11 @@ class AB(ODE):
         beta1, beta2 = self.fixed_params
 
         return (
-            f"{self.name}\n"
+            f"{self.name}\n\n"
             f"Equations:\n"
-            f"  dA/dt = {alpha1:.4f} + {alpha2:.4f}*A + {alpha3:.4f}*B\n"
-            f"  dB/dt = {beta1:.4f}*A - {beta2:.4f}*B\n"
+            f"  dA/dt = {alpha1:.2f} + {alpha2:.2f}*A + {alpha3:.2f}*B\n"
+            f"  dB/dt = {beta1:.2f}*A - {beta2:.2f}*B\n"
             f"Parameters:\n"
-            f"  alpha1 = {alpha1:.4f}, alpha2 = {alpha2:.4f}, alpha3 = {alpha3:.4f}\n"
-            f"  beta1 = {beta1:.4f}, beta2 = {beta2:.4f}"
+            f"  alpha1 = {alpha1:.2f}, alpha2 = {alpha2:.2f}, alpha3 = {alpha3:.2f}\n"
+            f"  beta1 = {beta1:.2f}, beta2 = {beta2:.2f}"
         )

@@ -1,7 +1,7 @@
 import torch
 from typing import Callable, Tuple, Dict, Optional, Union, List
 from copy import deepcopy
-from torchdiffeq import odeint
+from torchdiffeq import odeint, odeint_event
 from rpasim.ode import ODE
 
 
@@ -34,34 +34,35 @@ def _process_state_limits(
     return (lower_bounds, upper_bounds)
 
 
-def _check_state_limits(
-    traj: torch.Tensor,
-    state_limits: Optional[Tuple[torch.Tensor, torch.Tensor]],
-) -> Optional[int]:
-    """Check if trajectory violates state limits.
+def _make_event_fn(state_limits: Optional[Tuple[torch.Tensor, torch.Tensor]]):
+    """Create an event function for state limit violations.
 
     Args:
-        traj: Trajectory tensor of shape (n_steps, n_vars)
         state_limits: Tuple of (lower_bounds, upper_bounds)
 
     Returns:
-        Index of first violation, or None if no violation
+        Event function that returns 0 when any state violates limits,
+        or None if no limits are set
     """
     if state_limits is None:
         return None
 
     lower_bounds, upper_bounds = state_limits
 
-    # Check if any state violates bounds at each time step
-    below_lower = (traj < lower_bounds).any(dim=1)
-    above_upper = (traj > upper_bounds).any(dim=1)
-    violations = below_lower | above_upper
+    def event_fn(t, y):
+        # Add small epsilon to bounds to avoid triggering at exact boundary
+        epsilon = 1e-9
+        # Compute margin from lower and upper bounds for each variable
+        margin_lower = y - (lower_bounds - epsilon)
+        margin_upper = (upper_bounds + epsilon) - y
 
-    if violations.any():
-        # Return index of first violation
-        return violations.nonzero()[0].item()
+        # Get minimum margin across all variables and bounds
+        min_margin = torch.min(torch.min(margin_lower), torch.min(margin_upper))
 
-    return None
+        # Clamp to 0 so event_fn is exactly 0 when violated
+        return torch.max(min_margin, torch.tensor(0.0))
+
+    return event_fn
 
 
 class DifferentiableEnv:
@@ -172,36 +173,84 @@ class DifferentiableEnv:
         t = torch.unique(t, sorted=True)
 
         # Simulate using torchdiffeq
-        traj = odeint(self.current_ode, self.current_state, t, method="rk4")
+        event_fn = _make_event_fn(self.state_limits)
 
-        # Check for state limit violations
-        violation_idx = _check_state_limits(traj, self.state_limits)
+        try:
+            # Try regular odeint first (most efficient path)
+            traj = odeint(self.current_ode, self.current_state, t, method="rk4")
 
-        if violation_idx is None:
-            # No violation: proceed normally
+            # Check for state limit violations on the grid
+            violation_idx = None
+            if event_fn is not None:
+                for idx, state in enumerate(traj):
+                    if (event_fn(t[idx], state) == 0).any():
+                        violation_idx = idx
+                        break
+
+            if violation_idx is None:
+                # No violation: proceed normally
+                self.current_state = traj[-1]
+                self.current_time = end_time
+                n_grid_points = len(grid_points)
+                grid_traj = traj[:n_grid_points]
+                truncated = False
+                remaining_grid_points = 0
+            else:
+                # Truncate trajectory at violation point
+                traj = traj[: violation_idx + 1]
+                n_grid_points = min(violation_idx + 1, len(grid_points))
+                grid_traj = traj[:n_grid_points]
+                grid_points = grid_points[:n_grid_points]
+
+                # Update state and time to violation point
+                self.current_state = traj[-1]
+                self.current_time = self.current_time + t[violation_idx]
+
+                # Count remaining grid points from violation time to time horizon
+                remaining_grid_points = (
+                    ((self.reward_grid > self.current_time) & (self.reward_grid <= self.time_horizon)).sum().item()
+                )
+                truncated = True
+
+        except (RuntimeError, ValueError) as e:
+            # ODE solver failed - likely numerical explosion
+            if event_fn is None:
+                raise ValueError(
+                    f"ODE integration failed with error: {e}. "
+                    "This is likely due to numerical instability. "
+                    "Consider adding state_limits to prevent dynamics from exploding."
+                ) from e
+
+            # Use event handling to find exact stopping time
+            t_span = torch.tensor([0.0, time_delta])
+            event_t, event_y = odeint(
+                self.current_ode,
+                self.current_state,
+                t_span,
+                event_fn=event_fn,
+                method="rk4",
+                atol=1e-6,
+                rtol=1e-3,
+            )
+            actual_end_time = event_t.item()
+
+            # Get trajectory up to stopping time with grid points
+            t_eval = t[t <= actual_end_time]
+            traj = odeint(self.current_ode, self.current_state, t_eval, method="rk4")
+
+            # Update state and time
             self.current_state = traj[-1]
-            self.current_time = end_time
-            n_grid_points = len(grid_points)
-            grid_traj = traj[:n_grid_points]
-            truncated = False
-            remaining_grid_points = 0
-        else:
-            # Truncate trajectory at violation point
-            traj = traj[: violation_idx + 1]
-            n_grid_points = min(violation_idx + 1, len(grid_points))
+            self.current_time = self.current_time + actual_end_time
+
+            # Determine which points are on the reward grid
+            n_grid_points = (grid_points <= self.current_time).sum().item()
             grid_traj = traj[:n_grid_points]
             grid_points = grid_points[:n_grid_points]
 
-            # Update state and time to violation point
-            self.current_state = traj[-1]
-            self.current_time = self.current_time + t[violation_idx]
-
-            # Count remaining grid points from violation time to time horizon
-            # Use > not >= because we already sampled the point at current_time
+            # Count remaining grid points
             remaining_grid_points = (
-                (self.reward_grid > self.current_time)
-                & (self.reward_grid <= self.time_horizon)
-            ).sum().item()
+                ((self.reward_grid > self.current_time) & (self.reward_grid <= self.time_horizon)).sum().item()
+            )
             truncated = True
 
         # Append trajectory segment (grid points only)

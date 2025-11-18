@@ -81,10 +81,10 @@ class PopulationDynamics(ODE):
         a, b, c, d = self.fixed_params
 
         return (
-            f"{self.name}\n"
+            f"{self.name}\n\n"
             f"Equations:\n"
-            f"  dprey/dt = {a:.4f}*prey - {b:.4f}*prey*predator\n"
-            f"  dpredator/dt = -{c:.4f}*predator + {d:.4f}*prey*predator\n"
+            f"  dprey/dt = {a:.2f}*prey - {b:.2f}*prey*predator\n"
+            f"  dpredator/dt = -{c:.2f}*predator + {d:.2f}*prey*predator\n"
             f"Parameters:\n"
-            f"  a = {a:.4f}, b = {b:.4f}, c = {c:.4f}, d = {d:.4f}"
+            f"  a = {a:.2f}, b = {b:.2f}, c = {c:.2f}, d = {d:.2f}"
         )
