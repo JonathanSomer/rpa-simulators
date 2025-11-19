@@ -41,7 +41,7 @@ def test_state_limit_truncation():
     ode = ConstantODE(c)
 
     # Reward function: simple negative x
-    def reward_fn(state):
+    def reward_fn(state, t):
         return -state[0]
 
     # Create env with state limit
@@ -109,7 +109,7 @@ def test_no_truncation_without_limits():
 
     ode = ConstantODE(c)
 
-    def reward_fn(state):
+    def reward_fn(state, t):
         return -state[0]
 
     # Create env WITHOUT state limits
@@ -142,7 +142,7 @@ def test_trajectory_consistency_across_grid_widths():
     x0 = torch.tensor([1.0, 0.5])
     T = 10.0
 
-    def reward_fn(state):
+    def reward_fn(state, t):
         return -torch.norm(state)
 
     # Create envs with different grid widths
@@ -208,7 +208,7 @@ def test_trajectory_consistency_single_vs_multi_step():
     T = 10.0
     n_reward_steps = 100
 
-    def reward_fn(state):
+    def reward_fn(state, t):
         return -torch.norm(state)
 
     # Single step environment
@@ -263,3 +263,61 @@ def test_trajectory_consistency_single_vs_multi_step():
     reward_diff = abs(reward_single.item() - total_reward_multi.item())
     assert reward_diff < 1.0, \
         f"Total rewards differ: single={reward_single.item():.2f}, multi={total_reward_multi.item():.2f}, diff={reward_diff}"
+
+
+def test_time_dependent_reward():
+    """Test that time parameter is correctly passed to reward function."""
+    # Track which times the reward function was called with
+    times_called = []
+
+    def reward_fn(state, t):
+        times_called.append(t.item())
+        # Time-varying reference: r(t) = t
+        reference = t
+        return -(state[0] - reference) ** 2
+
+    # Setup: dx/dt = 0, x0 = 5.0, so x(t) = 5.0 for all t
+    # Reference: r(t) = t
+    # At each time t, tracking error = x(t) - r(t) = 5.0 - t
+    # Reward = -(error)^2 = -(5.0 - t)^2
+    c = 0.0
+    x0 = torch.tensor([5.0])
+    T = 10.0
+    n_reward_steps = 10  # Grid: 0, 1, 2, ..., 10
+
+    ode = ConstantODE(c)
+    env = DifferentiableEnv(
+        initial_ode=ode,
+        reward_fn=reward_fn,
+        initial_state=x0,
+        time_horizon=T,
+        n_reward_steps=n_reward_steps,
+    )
+
+    # Run environment
+    env.reset()
+    env.step((ode, T))
+
+    # Verify times match grid points (0, 1, 2, ..., 9)
+    # Note: grid points are sampled at [current_time, end_time), excluding endpoint
+    expected_times = [float(i) for i in range(10)]
+    assert len(times_called) == len(expected_times), \
+        f"Expected {len(expected_times)} time points, got {len(times_called)}"
+
+    for i, (actual, expected) in enumerate(zip(times_called, expected_times)):
+        assert abs(actual - expected) < 0.01, \
+            f"Time point {i}: expected {expected}, got {actual}"
+
+    # Verify reward computation with time-dependent reference
+    # At t=5: x=5.0, r=5.0, error=0, reward=0
+    times, states, rewards = env.get_trajectory()
+
+    # Manually compute expected reward at t=5 (6th point, index 5)
+    t_test = 5.0
+    x_test = 5.0  # x(t) = 5.0 (constant)
+    r_test = t_test  # r(5) = 5.0
+    expected_reward_at_5 = -((x_test - r_test) ** 2)  # -(5.0-5.0)^2 = 0
+
+    actual_reward_at_5 = rewards[5].item()
+    assert abs(actual_reward_at_5 - expected_reward_at_5) < 0.01, \
+        f"At t=5: expected reward {expected_reward_at_5:.2f}, got {actual_reward_at_5:.2f}"

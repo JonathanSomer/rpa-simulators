@@ -77,7 +77,7 @@ class DifferentiableEnv:
     def __init__(
         self,
         initial_ode: ODE,
-        reward_fn: Callable[[torch.Tensor], torch.Tensor],
+        reward_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         initial_state: torch.Tensor,
         time_horizon: float,
         n_reward_steps: int = 1000,
@@ -87,7 +87,7 @@ class DifferentiableEnv:
 
         Args:
             initial_ode: Initial ODE instance
-            reward_fn: Function mapping state -> reward
+            reward_fn: Function mapping (state, time) -> reward
             initial_state: Initial state tensor
             time_horizon: Maximum time for the environment
             n_reward_steps: Number of steps for reward computation grid
@@ -204,7 +204,7 @@ class DifferentiableEnv:
 
                 # Update state and time to violation point
                 self.current_state = traj[-1]
-                self.current_time = self.current_time + t[violation_idx]
+                self.current_time = self.current_time + t[violation_idx].item()
 
                 # Count remaining grid points from violation time to time horizon
                 remaining_grid_points = (
@@ -260,11 +260,11 @@ class DifferentiableEnv:
         self.time_segments.append(grid_points)
 
         # Compute rewards for grid points only
-        rewards = torch.stack([self.reward_fn(state) for state in grid_traj])
+        rewards = torch.stack([self.reward_fn(state, t) for state, t in zip(grid_traj, grid_points)])
 
         # If truncated, add penalty for remaining grid points to horizon
         if truncated and remaining_grid_points > 0:
-            final_reward = self.reward_fn(self.current_state)
+            final_reward = self.reward_fn(self.current_state, torch.tensor(self.current_time))
             penalty = final_reward * remaining_grid_points
             rewards = torch.cat([rewards, penalty.unsqueeze(0)])
 
