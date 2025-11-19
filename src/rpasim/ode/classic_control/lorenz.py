@@ -3,28 +3,41 @@ from ..base import ODE
 
 
 class Lorenz(ODE):
-    """Chaotic Lorenz system ODE.
+    """Chaotic Lorenz system modeling Rayleigh-Bénard convection.
 
-    Classic chaotic system exhibiting sensitive dependence on initial conditions.
+    From Brunton et al., "Sparse identification of nonlinear dynamics with
+    control (SINDy-MPC)", Proc. R. Soc. A 474: 20180335 (2018), Section 4.
 
-    Equations:
-        dx1/dt = sigma*(x2 - x1)
-        dx2/dt = x1*(rho - x3) - x2
-        dx3/dt = x1*x2 - beta*x3
+    Prototypical example of chaos in dynamical systems. Originally proposed
+    by Lorenz [65] for atmospheric convection.
+
+    Equations (from paper Eq. 4.1, uncontrolled u=0):
+        dx1/dt = σ(x2 - x1)
+        dx2/dt = x1(ρ - x3) - x2
+        dx3/dt = x1*x2 - β*x3
+
+    Control effects (when u != 0):
+        dx1/dt = σ(x2 - x1) + u  (control affects only first state)
 
     Parameters (all fixed):
-        sigma = 10      (Prandtl number)
-        beta = 8/3      (geometric factor)
-        rho = 28        (Rayleigh number)
+        σ = 10      (Prandtl number)
+        β = 8/3     (geometric factor)
+        ρ = 28      (Rayleigh number)
+
+    Fixed points:
+        Two weakly unstable fixed points: (±√72, ±√72, 27)ᵀ ≈ (±8.49, ±8.49, 27)ᵀ
+        Trajectories typically oscillate alternately around these points.
 
     Control objective:
-        - Control adds to x1: dx1/dt = sigma*(x2 - x1) + u
+        - Stabilize one of the fixed points
+        - Cost function: Q = I₃ (3×3 identity), R_u = R_Δu = 0.001
         - Control limits: u ∈ [-50, 50]
-        - Cost function: Q = I (3x3 identity), R = 0.001
-        - Time horizon: 10
 
-    State:
-        x: [x1, x2, x3]
+    State variables:
+        x1, x2, x3: State components (dimensionless)
+
+    Control:
+        u: Control input affecting x1 only
     """
 
     name = "Lorenz System (Chaotic)"

@@ -3,29 +3,48 @@ from ..base import ODE
 
 
 class PopulationDynamics(ODE):
-    """Lotka-Volterra predator-prey population dynamics ODE.
+    """Lotka-Volterra predator-prey population dynamics.
 
     From Brunton et al., "Sparse identification of nonlinear dynamics with
-    control (SINDy-MPC)", Proc. R. Soc. A 474: 20180335 (2018).
+    control (SINDy-MPC)", Proc. R. Soc. A 474: 20180335 (2018), Section 3.
 
-    Equations:
-        dx1/dt = a*x1 - b*x1*x2  (prey)
-        dx2/dt = -c*x2 + d*x1*x2  (predator)
+    Two-dimensional, weakly nonlinear system describing interaction between
+    competing populations. May represent biological species, competition in
+    stock markets, or spread of infectious diseases.
+
+    Equations (from paper Eq. 3.1, uncontrolled u=0):
+        dx1/dt = a*x1 - b*x1*x2  (prey population)
+        dx2/dt = -c*x2 + d*x1*x2  (predator population)
+
+    Control effects (when u != 0):
+        dx2/dt = -c*x2 + d*x1*x2 + u  (control affects predator only)
 
     Parameters (all fixed):
         a = 0.5   (prey growth rate)
-        b = 0.025 (predation rate)
+        b = 0.025 (effect of predation on prey population)
         c = 0.5   (predator death rate)
-        d = 0.005 (predator efficiency)
+        d = 0.005 (predator growth based on prey population size)
 
-    Control objective (from Brunton's paper):
-        - Stabilize critical point: x_crit = (c/d, a/b)^T = (100, 20)^T
-        - Control is added to predator equation: dx2/dt = -c*x2 + d*x1*x2 + u
-        - Cost function: Q = I (identity), R = 0.5
+    Fixed point:
+        Critical point x^crit = (c/d, a/b)^T = (100, 20)^T
+        At this point, population sizes are in balance.
+
+    System behavior:
+        - Unforced system exhibits limit cycle behavior (predator lags prey)
+        - Control objective: stabilize the critical point
+
+    Control objective:
+        - Stabilize critical point (100, 20)^T
+        - Cost function: Q = I₂ (2×2 identity), R_u = R_Δu = 0.5
         - Control limits: u ∈ [-20, 20]
+        - Constraint: x2 ≥ 10 (minimum predator population for recovery)
 
-    State:
-        x: [prey, predator]
+    State variables:
+        x1: prey population size
+        x2: predator population size
+
+    Control:
+        u: Control input affecting predator population only
     """
 
     name = "Population Dynamics (Lotka-Volterra)"

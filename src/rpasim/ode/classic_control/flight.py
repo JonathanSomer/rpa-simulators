@@ -3,15 +3,17 @@ from ..base import ODE
 
 
 class FlightControl(ODE):
-    """Flight control system ODE with nonlinear dynamics.
+    """F-8 Crusader aircraft flight control system with nonlinear dynamics.
 
     From Brunton et al., "Sparse identification of nonlinear dynamics with
-    control (SINDy-MPC)", Proc. R. Soc. A 474: 20180335 (2018).
+    control (SINDy-MPC)", Proc. R. Soc. A 474: 20180335 (2018), Section 5.
 
-    Equations (uncontrolled, u=0):
-        dx1/dt = alpha1*x1 + alpha2*x3 + alpha3*x1*x3 + alpha4*x1^2 + alpha5*x2^2 + alpha6*x1^2*x3 + alpha7*x1^3
-        dx2/dt = beta1*x3
-        dx3/dt = gamma1*x1 + gamma2*x3 + gamma3*x1^2 + gamma4*x1^3
+    Aircraft dynamics at 30,000 ft (9000 m) and Mach = 0.85.
+
+    Equations (from paper Eq. 5.1, uncontrolled u=0):
+        dx1/dt = -0.877*x1 + x3 - 0.088*x1*x3 + 0.47*x1^2 - 0.019*x2^2 - x1^2*x3 + 3.846*x1^3
+        dx2/dt = x3
+        dx3/dt = -4.208*x1 - 0.396*x3 - 0.47*x1^2 - 3.564*x1^3
 
     Control effects (when u != 0):
         dx1/dt adds: -0.215*u + 0.28*x1^2*u + 0.47*x1*u^2 + 0.63*u^3
@@ -23,15 +25,21 @@ class FlightControl(ODE):
         beta1 = 1.0
         gamma1 = -4.208, gamma2 = -0.396, gamma3 = -0.47, gamma4 = -3.564
 
-    Control objective:
-        - Track reference: r(t) = 0.4*(-0.5/(1+exp(t/0.1-0.8)) + 1/(1+exp(t/0.1-3)) - 0.4)
-        - Cost function: Q = 25, R = 0.05
-        - Control limits: u ∈ [-0.3, 0.5]
-        - Time horizon: 13
-        - State limit on x1: [-0.2, 0.4]
+    Control objective (from paper Eq. 5.2):
+        - Track reference trajectory: r(t) = 0.4*(-0.5/(1+exp(-t/0.1-0.8)) + 1/(1+exp(t/0.1-3)) - 0.4)
+        - Cost function: Q = 25 (tracking x1), R = 0.05
+        - Control limits: u ∈ [-0.3, 0.5] (tail deflection angle)
+        - State limit on x1: [-0.2, 0.4] rad (angle of attack constraint)
+        - Time horizon: 13 seconds
+        - System timestep: Δt = 0.001, Model timestep: Δt^M = 0.01
 
-    State:
-        x: [x1, x2, x3]
+    State variables:
+        x1: angle of attack (rad)
+        x2: pitch angle (rad)
+        x3: pitch rate (rad/s)
+
+    Control:
+        u: tail deflection angle (rad)
     """
 
     name = "Flight Control System"
