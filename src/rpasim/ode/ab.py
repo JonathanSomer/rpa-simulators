@@ -66,23 +66,29 @@ class AB(ODE):
         Args:
             t: Time tensor (unused in this system)
             x: State tensor [A, B]
-            differentiable_params: [alpha1, alpha2, alpha3]
-            fixed_params: [beta1, beta2]
+            differentiable_params: [alpha1, alpha2, alpha3] OR [alpha2, alpha3] if alpha1 is fixed
+            fixed_params: [beta1, beta2] OR [alpha1, beta1, beta2] if alpha1 is fixed
 
         Returns:
             dx/dt tensor [dA/dt, dB/dt]
         """
-        assert len(differentiable_params) == 3, "Expected 3 differentiable params"
-        assert len(fixed_params) == 2, "Expected 2 fixed params"
         assert len(x) == 2, "Expected state [A, B]"
 
         # Unpack state
         A = x[0]
         B = x[1]
 
-        # Unpack parameters
-        alpha1, alpha2, alpha3 = differentiable_params
-        beta1, beta2 = fixed_params
+        # Flexible parameter handling
+        if len(differentiable_params) == 3 and len(fixed_params) == 2:
+            # Standard: [alpha1, alpha2, alpha3] differentiable, [beta1, beta2] fixed
+            alpha1, alpha2, alpha3 = differentiable_params
+            beta1, beta2 = fixed_params
+        elif len(differentiable_params) == 2 and len(fixed_params) == 3:
+            # Alternative: [alpha2, alpha3] differentiable, [alpha1, beta1, beta2] fixed
+            alpha2, alpha3 = differentiable_params
+            alpha1, beta1, beta2 = fixed_params
+        else:
+            raise ValueError(f"Unsupported parameter configuration: {len(differentiable_params)} differentiable, {len(fixed_params)} fixed")
 
         # Compute derivatives
         dA_dt = alpha1 + alpha2 * A + alpha3 * B

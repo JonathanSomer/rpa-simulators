@@ -1,6 +1,5 @@
 import torch
 from typing import Callable, Tuple, Dict, Optional, Union, List
-from copy import deepcopy
 from torchdiffeq import odeint, odeint_event
 from rpasim.ode import ODE
 
@@ -118,11 +117,11 @@ class DifferentiableEnv:
         """Reset environment to initial state.
 
         Returns:
-            observation: (ODE copy, state)
+            observation: (ODE, state)
             info: Empty dict
         """
-        # Reset to initial state
-        self.current_ode = deepcopy(self.initial_ode)
+        # Reset to initial state (no deepcopy for gradient flow)
+        self.current_ode = self.initial_ode
         self.current_state = self.initial_state.clone()
         self.current_time = 0.0
 
@@ -134,8 +133,8 @@ class DifferentiableEnv:
         initial_reward = 0
         self.reward_segments = []
 
-        # Return observation as (ODE copy, state)
-        observation = (deepcopy(self.current_ode), self.current_state.clone())
+        # Return observation as (ODE, state)
+        observation = (self.current_ode, self.current_state.clone())
         info = {}
 
         return observation, info
@@ -147,7 +146,7 @@ class DifferentiableEnv:
             action: (new_ode, time_to_apply)
 
         Returns:
-            observation: (ODE copy, new_state)
+            observation: (ODE, new_state)
             reward: Sum of rewards over trajectory sampled at reward_dt intervals
             terminated: Whether episode is done
             truncated: Whether episode was truncated
@@ -274,8 +273,8 @@ class DifferentiableEnv:
         # Return sum of rewards (as tensor for gradient computation)
         reward = rewards.sum()
 
-        # Return observation as (ODE copy, state)
-        observation = (deepcopy(self.current_ode), self.current_state.clone())
+        # Return observation as (ODE, state)
+        observation = (self.current_ode, self.current_state.clone())
 
         # Check if we've reached or passed the time horizon
         terminated = self.current_time >= self.time_horizon
