@@ -79,6 +79,7 @@ class ODE(ABC):
         x: torch.Tensor,
         differentiable_params: Optional[torch.Tensor] = None,
         fixed_params: Optional[torch.Tensor] = None,
+        control: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Compute dx/dt (makes the class callable).
 
@@ -89,6 +90,7 @@ class ODE(ABC):
             x: State tensor
             differentiable_params: Optional override for differentiable params
             fixed_params: Optional override for fixed params
+            control: Optional control input tensor (for controlled ODEs)
 
         Returns:
             dx/dt tensor
@@ -105,4 +107,9 @@ class ODE(ABC):
             else self.fixed_params
         )
 
-        return self.forward(t, x, diff_params, fix_params)
+        # Only pass control if it is explicitly provided (not None)
+        forward_kwargs = {}
+        if control is not None:
+            forward_kwargs['control'] = control
+
+        return self.forward(t, x, diff_params, fix_params, **forward_kwargs)

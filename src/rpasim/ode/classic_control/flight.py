@@ -69,6 +69,7 @@ class FlightControl(ODE):
         x: torch.Tensor,
         differentiable_params: torch.Tensor | None = None,
         fixed_params: torch.Tensor | None = None,
+        control: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute dx/dt for the flight control system.
 
@@ -77,6 +78,8 @@ class FlightControl(ODE):
             x: State tensor [x1, x2, x3]
             differentiable_params: Not used (all params are fixed)
             fixed_params: [alpha1-7, beta1, gamma1-4]
+            control: Control input u (tail deflection angle in rad)
+                    Can be scalar or tensor of shape (1,) for single control input
 
         Returns:
             dx/dt tensor [dx1/dt, dx2/dt, dx3/dt]
@@ -95,12 +98,24 @@ class FlightControl(ODE):
         beta1 = fixed_params[7]
         gamma1, gamma2, gamma3, gamma4 = fixed_params[8:]
 
-        # Compute derivatives (uncontrolled system, u=0)
+        # Extract control input (default to 0 if not provided)
+        if control is not None:
+            u = control[0] if control.dim() > 0 else control
+        else:
+            u = torch.tensor(0.0)
+
+        # Control coefficients from paper Eq. 5.1
+        delta1, delta2, delta3, delta4 = -0.215, 0.28, 0.47, 0.63
+        epsilon1, epsilon2, epsilon3, epsilon4 = -20.967, 6.265, 46.0, 61.1
+
+        # Compute derivatives with control
         dx1_dt = (alpha1 * x1 + alpha2 * x3 + alpha3 * x1 * x3 +
                   alpha4 * x1**2 + alpha5 * x2**2 + alpha6 * x1**2 * x3 +
-                  alpha7 * x1**3)
+                  alpha7 * x1**3 +
+                  delta1 * u + delta2 * x1**2 * u + delta3 * x1 * u**2 + delta4 * u**3)
         dx2_dt = beta1 * x3
-        dx3_dt = gamma1 * x1 + gamma2 * x3 + gamma3 * x1**2 + gamma4 * x1**3
+        dx3_dt = (gamma1 * x1 + gamma2 * x3 + gamma3 * x1**2 + gamma4 * x1**3 +
+                  epsilon1 * u + epsilon2 * x1**2 * u + epsilon3 * x1 * u**2 + epsilon4 * u**3)
 
         return torch.stack([dx1_dt, dx2_dt, dx3_dt])
 

@@ -66,6 +66,7 @@ class PopulationDynamics(ODE):
         x: torch.Tensor,
         differentiable_params: torch.Tensor | None = None,
         fixed_params: torch.Tensor | None = None,
+        control: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute dx/dt for the population dynamics system.
 
@@ -74,6 +75,8 @@ class PopulationDynamics(ODE):
             x: State tensor [prey, predator]
             differentiable_params: Not used (all params are fixed)
             fixed_params: [a, b, c, d]
+            control: Control input tensor (affects predator only)
+                    Can be scalar or tensor of shape (1,) for single control input
 
         Returns:
             dx/dt tensor [dprey/dt, dpredator/dt]
@@ -89,9 +92,15 @@ class PopulationDynamics(ODE):
         # Unpack parameters
         a, b, c, d = fixed_params
 
+        # Extract control input (default to 0 if not provided)
+        if control is not None:
+            u = control[0] if control.dim() > 0 else control
+        else:
+            u = torch.tensor(0.0)
+
         # Compute derivatives
         dx1_dt = a * x1 - b * x1 * x2
-        dx2_dt = -c * x2 + d * x1 * x2
+        dx2_dt = -c * x2 + d * x1 * x2 + u  # Control affects predator
 
         return torch.stack([dx1_dt, dx2_dt])
 
