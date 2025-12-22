@@ -77,25 +77,56 @@ class DifferentiableEnv:
         self,
         initial_ode: ODE,
         reward_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        initial_state: torch.Tensor,
-        time_horizon: float,
+        initial_state: torch.Tensor = None,
+        time_horizon: float = 10.0,
         n_reward_steps: int = 1000,
         state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+        initial_state_range: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     ):
         """Initialize the differentiable environment.
 
         Args:
             initial_ode: Initial ODE instance
             reward_fn: Function mapping (state, time) -> reward
-            initial_state: Initial state tensor
+            initial_state: Initial state tensor (used if initial_state_range is None)
             time_horizon: Maximum time for the environment
             n_reward_steps: Number of steps for reward computation grid
             state_limits: Optional limits for state variables. Can be:
                 - Single tuple (lower, upper) applied to all variables
                 - List of tuples, one per variable
+            initial_state_range: Optional range for randomizing initial state on each reset. Can be:
+                - Single tuple (lower, upper) applied to all state variables
+                - List of tuples, one per state variable
+                If provided, initial_state will be sampled uniformly from this range on each reset.
         """
         self.initial_ode = initial_ode
         self.reward_fn = reward_fn
+
+        # Handle initial state range for randomization
+        self.initial_state_range = initial_state_range
+        if initial_state_range is not None:
+            # Determine number of state variables from the range
+            if isinstance(initial_state_range, tuple):
+                # Need to get n_vars from initial_state or infer from ODE
+                if initial_state is not None:
+                    n_vars = len(initial_state)
+                else:
+                    raise ValueError("Must provide initial_state to determine state dimension when using single-tuple initial_state_range")
+            else:
+                # List of tuples - number of variables is clear
+                n_vars = len(initial_state_range)
+
+            # Process range into (lower_bounds, upper_bounds)
+            self.initial_state_bounds = _process_state_limits(initial_state_range, n_vars)
+            # Set a default initial_state (will be overwritten on first reset)
+            if initial_state is None:
+                lower_bounds, upper_bounds = self.initial_state_bounds
+                initial_state = (lower_bounds + upper_bounds) / 2
+        else:
+            self.initial_state_bounds = None
+            if initial_state is None:
+                raise ValueError("Must provide either initial_state or initial_state_range")
+
         self.initial_state = initial_state
         self.time_horizon = time_horizon
         self.n_reward_steps = n_reward_steps
@@ -116,13 +147,26 @@ class DifferentiableEnv:
     def reset(self, seed: int = None, options: dict = None) -> Tuple[Tuple[ODE, torch.Tensor], Dict]:
         """Reset environment to initial state.
 
+        Args:
+            seed: Random seed (currently unused, for future compatibility)
+            options: Additional options (currently unused)
+
         Returns:
             observation: (ODE, state)
             info: Empty dict
         """
         # Reset to initial state (no deepcopy for gradient flow)
         self.current_ode = self.initial_ode
-        self.current_state = self.initial_state.clone()
+
+        # Sample random initial state if range is provided, otherwise use fixed initial state
+        if self.initial_state_bounds is not None:
+            lower_bounds, upper_bounds = self.initial_state_bounds
+            # Sample uniformly within bounds
+            random_factors = torch.rand_like(lower_bounds)
+            self.current_state = lower_bounds + random_factors * (upper_bounds - lower_bounds)
+        else:
+            self.current_state = self.initial_state.clone()
+
         self.current_time = 0.0
 
         # Initialize empty trajectory
@@ -263,8 +307,16 @@ class DifferentiableEnv:
 
         # If truncated, add penalty for remaining grid points to horizon
         if truncated and remaining_grid_points > 0:
-            final_reward = self.reward_fn(self.current_state, torch.tensor(self.current_time))
-            penalty = final_reward * remaining_grid_points
+            # Use clamped boundary state for penalty, not the exploded state
+            # This gives a more reasonable penalty based on "staying at the limit"
+            if self.state_limits is not None:
+                lower_bounds, upper_bounds = self.state_limits
+                boundary_state = torch.clamp(self.current_state, lower_bounds, upper_bounds)
+            else:
+                boundary_state = self.current_state
+
+            boundary_reward = self.reward_fn(boundary_state, torch.tensor(self.current_time))
+            penalty = boundary_reward * remaining_grid_points
             rewards = torch.cat([rewards, penalty.unsqueeze(0)])
 
         # Append reward segment
