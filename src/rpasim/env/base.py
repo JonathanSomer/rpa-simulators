@@ -220,7 +220,7 @@ class DifferentiableEnv:
 
         try:
             # Try regular odeint first (most efficient path)
-            traj = odeint(self.current_ode, self.current_state, t, method="rk4")
+            traj = odeint(self.current_ode, self.current_state, t, method="dopri5")
 
             # Check for state limit violations on the grid
             violation_idx = None

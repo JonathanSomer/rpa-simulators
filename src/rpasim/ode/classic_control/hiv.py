@@ -88,6 +88,7 @@ class HIVTreatment(ODE):
         x: torch.Tensor,
         differentiable_params: torch.Tensor | None = None,
         fixed_params: torch.Tensor | None = None,
+        control: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute dx/dt for the HIV treatment system.
 
@@ -96,6 +97,8 @@ class HIVTreatment(ODE):
             x: State tensor [x1, x2, x3, x4, x5]
             differentiable_params: Not used (all params are fixed)
             fixed_params: [λ, d, β, a, p1, p2, c1, c2, b1, b2, q, h, η]
+            control: Control input u (HAART therapy level) in [0, 1]
+                    Can be scalar or tensor of shape (1,) for single control input
 
         Returns:
             dx/dt tensor [dx1/dt, dx2/dt, dx3/dt, dx4/dt, dx5/dt]
@@ -110,9 +113,18 @@ class HIVTreatment(ODE):
         # Unpack parameters
         lambda_p, d, beta, a, p1, p2, c1, c2, b1, b2, q, h, eta = fixed_params
 
-        # Compute derivatives (uncontrolled system, u=0)
-        dx1_dt = lambda_p - d * x1 - beta * x1 * x2
-        dx2_dt = beta * x1 * x2 - a * x2 - p1 * x4 * x2 - p2 * x5 * x2
+        # Extract control input (default to 0 if not provided)
+        if control is not None:
+            u = control[0] if control.dim() > 0 else control
+        else:
+            u = torch.tensor(0.0)
+
+        # Effective infection rate with control: β_eff = β(1 - η*u)
+        beta_eff = beta * (1 - eta * u)
+
+        # Compute derivatives with control
+        dx1_dt = lambda_p - d * x1 - beta_eff * x1 * x2
+        dx2_dt = beta_eff * x1 * x2 - a * x2 - p1 * x4 * x2 - p2 * x5 * x2
         dx3_dt = c2 * x1 * x2 * x3 - c2 * q * x2 * x3 - b2 * x3
         dx4_dt = c1 * x2 * x4 - b1 * x4
         dx5_dt = c2 * q * x2 * x3 - h * x5

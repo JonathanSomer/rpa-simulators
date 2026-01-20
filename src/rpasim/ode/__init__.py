@@ -1,4 +1,4 @@
 from .base import ODE
-from .ab import AB
+from .ab import AB, ABControlled
 
-__all__ = ["ODE", "AB"]
+__all__ = ["ODE", "AB", "ABControlled"]

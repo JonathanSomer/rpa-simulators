@@ -110,3 +110,120 @@ class AB(ODE):
             f"  alpha1 = {alpha1:.2f}, alpha2 = {alpha2:.2f}, alpha3 = {alpha3:.2f}\n"
             f"  beta1 = {beta1:.2f}, beta2 = {beta2:.2f}"
         )
+
+
+class ABControlled(ODE):
+    """Controlled integral feedback model with two variables.
+
+    This is a controlled version of the AB model where the alpha parameters
+    (formerly differentiable) are now fixed but modulated by control inputs.
+
+    Equations:
+        dA/dt = alpha1*u[0] + alpha2*u[1]*A + alpha3*u[2]*B
+        dB/dt = beta1*A - beta2*B
+
+    Each control input u[i] acts as a multiplier on the corresponding alpha
+    parameter, allowing dynamic modulation of the system behavior.
+
+    Parameters:
+        fixed_params: [alpha1, alpha2, alpha3, beta1, beta2]
+
+    Default parameters:
+        alpha1 = 1, alpha2 = 0, alpha3 = -1/4
+        beta1 = 4, beta2 = 1
+
+    Control:
+        u: [u0, u1, u2] - control inputs multiplying alpha1, alpha2, alpha3
+        When u = [1, 1, 1], behavior matches the original AB system
+
+    State:
+        x: [A, B]
+    """
+
+    name = "AB Controlled (Integral Feedback)"
+    variable_names = ["A", "B"]
+    differentiable_param_names = []
+    fixed_param_names = ["alpha1", "alpha2", "alpha3", "beta1", "beta2"]
+
+    def __init__(
+        self,
+        fixed_params: torch.Tensor | None = None,
+    ):
+        """Initialize ABControlled ODE with parameters.
+
+        Args:
+            fixed_params: [alpha1, alpha2, alpha3, beta1, beta2].
+                         Defaults to [1, 0, -1/4, 4, 1]
+        """
+        if fixed_params is None:
+            fixed_params = torch.tensor([1.0, 0.0, -1/4, 4.0, 1.0])
+
+        super().__init__(
+            differentiable_params=None,
+            fixed_params=fixed_params
+        )
+
+    def forward(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        differentiable_params: torch.Tensor | None = None,
+        fixed_params: torch.Tensor | None = None,
+        control: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute dx/dt for the ABControlled ODE system.
+
+        Args:
+            t: Time tensor (unused in this system)
+            x: State tensor [A, B]
+            differentiable_params: Not used (all params are fixed)
+            fixed_params: [alpha1, alpha2, alpha3, beta1, beta2]
+            control: Control input tensor [u0, u1, u2] multiplying alpha params.
+                    Defaults to [1, 1, 1] if not provided (matches original AB).
+
+        Returns:
+            dx/dt tensor [dA/dt, dB/dt]
+        """
+        assert fixed_params is not None, "Fixed params required"
+        assert len(fixed_params) == 5, "Expected 5 fixed params [alpha1, alpha2, alpha3, beta1, beta2]"
+        assert len(x) == 2, "Expected state [A, B]"
+
+        # Unpack state
+        A = x[0]
+        B = x[1]
+
+        # Unpack parameters
+        alpha1, alpha2, alpha3, beta1, beta2 = fixed_params
+
+        # Extract control inputs (default to [1, 1, 1] if not provided)
+        if control is not None:
+            assert len(control) >= 3, "Expected at least 3 control inputs [u0, u1, u2]"
+            u0, u1, u2 = control[0], control[1], control[2]
+        else:
+            u0 = torch.tensor(1.0)
+            u1 = torch.tensor(1.0)
+            u2 = torch.tensor(1.0)
+
+        # Compute derivatives with control-modulated alpha parameters
+        dA_dt = alpha1 * u0 + alpha2 * u1 * A + alpha3 * u2 * B
+        dB_dt = beta1 * A - beta2 * B
+
+        return torch.stack([dA_dt, dB_dt])
+
+    def __str__(self) -> str:
+        """Return string representation with equations and parameters."""
+        alpha1, alpha2, alpha3, beta1, beta2 = self.fixed_params
+
+        return (
+            f"{self.name}\n\n"
+            f"Equations:\n"
+            f"  dA/dt = {alpha1:.2f}*u[0] + {alpha2:.2f}*u[1]*A + {alpha3:.2f}*u[2]*B\n"
+            f"  dB/dt = {beta1:.2f}*A - {beta2:.2f}*B\n"
+            f"Parameters:\n"
+            f"  alpha1 = {alpha1:.2f}, alpha2 = {alpha2:.2f}, alpha3 = {alpha3:.2f}\n"
+            f"  beta1 = {beta1:.2f}, beta2 = {beta2:.2f}\n"
+            f"Control:\n"
+            f"  u[0]: multiplier for alpha1 term\n"
+            f"  u[1]: multiplier for alpha2*A term\n"
+            f"  u[2]: multiplier for alpha3*B term"
+        )

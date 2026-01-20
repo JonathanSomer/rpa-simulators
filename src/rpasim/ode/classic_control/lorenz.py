@@ -59,6 +59,7 @@ class Lorenz(ODE):
         x: torch.Tensor,
         differentiable_params: torch.Tensor | None = None,
         fixed_params: torch.Tensor | None = None,
+        control: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute dx/dt for the Lorenz system.
 
@@ -67,6 +68,8 @@ class Lorenz(ODE):
             x: State tensor [x1, x2, x3]
             differentiable_params: Not used (all params are fixed)
             fixed_params: [sigma, beta, rho]
+            control: Control input tensor (affects x1 only)
+                    Can be scalar or tensor of shape (1,) for single control input
 
         Returns:
             dx/dt tensor [dx1/dt, dx2/dt, dx3/dt]
@@ -83,8 +86,14 @@ class Lorenz(ODE):
         # Unpack parameters
         sigma, beta, rho = fixed_params
 
+        # Extract control input (default to 0 if not provided)
+        if control is not None:
+            u = control[0] if control.dim() > 0 else control
+        else:
+            u = torch.tensor(0.0)
+
         # Compute derivatives
-        dx1_dt = sigma * (x2 - x1)
+        dx1_dt = sigma * (x2 - x1) + u  # Control affects x1
         dx2_dt = x1 * (rho - x3) - x2
         dx3_dt = x1 * x2 - beta * x3
 
