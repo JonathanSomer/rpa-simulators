@@ -1,4 +1,4 @@
 from .base import ODE
-from .ab import AB, ABControlled
+from .rpa import AB, ABControlled, HPA, HPASimple, NFL, IFFL
 
-__all__ = ["ODE", "AB", "ABControlled"]
+__all__ = ["ODE", "AB", "ABControlled", "HPA", "HPASimple", "NFL", "IFFL"]

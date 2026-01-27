@@ -1,5 +1,5 @@
 import torch
-from .base import ODE
+from ..base import ODE
 
 
 class AB(ODE):
