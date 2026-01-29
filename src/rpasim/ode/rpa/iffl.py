@@ -82,15 +82,15 @@ class IFFL(ODE):
                 1.0,    # k'_F_AA: degradation rate of A by F_A
                 0.5,    # K'_F_AA: affinity constant for A degradation
                 1.0,    # k_AB: activation rate of B by A
-                0.01, # K_AB: very small (so (1-B) >> K_AB)
+                0.001, # K_AB: very small (so (1-B) >> K_AB)
                 1.0,    # k'_F_BB: degradation rate of B by F_B
-                1000.0,   # K'_F_BB: very large (so B << K'_F_BB)
+                100.0,   # K'_F_BB: very large (so B << K'_F_BB)
                 1.0,    # k_AC: activation rate of C by A
                 0.5,    # K_AC: affinity constant for C activation
                 1.0,    # k'_BC: degradation rate of C by B
                 0.5,    # K'_BC: affinity constant for C degradation
                 1.0,    # F_A: basal enzyme for A
-                2.0,    # F_B: basal enzyme for B
+                200.0,    # F_B: basal enzyme for B
             ])
 
         super().__init__(differentiable_params=None, fixed_params=fixed_params)

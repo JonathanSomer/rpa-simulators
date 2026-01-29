@@ -218,9 +218,13 @@ class DifferentiableEnv:
         # Simulate using torchdiffeq
         event_fn = _make_event_fn(self.state_limits)
 
+        # Reset NFE counter before integration
+        self.current_ode.nfe = 0
+
         try:
             # Try regular odeint first (most efficient path)
             traj = odeint(self.current_ode, self.current_state, t, method="dopri5")
+            nfe_forward = self.current_ode.nfe
 
             # Check for state limit violations on the grid
             violation_idx = None
@@ -271,7 +275,7 @@ class DifferentiableEnv:
                 self.current_state,
                 t_span,
                 event_fn=event_fn,
-                method="rk4",
+                method="dopri5",
                 atol=1e-6,
                 rtol=1e-3,
             )
@@ -279,7 +283,8 @@ class DifferentiableEnv:
 
             # Get trajectory up to stopping time with grid points
             t_eval = t[t <= actual_end_time]
-            traj = odeint(self.current_ode, self.current_state, t_eval, method="rk4")
+            traj = odeint(self.current_ode, self.current_state, t_eval, method="dopri5")
+            nfe_forward = self.current_ode.nfe
 
             # Update state and time
             self.current_state = traj[-1]
@@ -330,7 +335,7 @@ class DifferentiableEnv:
 
         # Check if we've reached or passed the time horizon
         terminated = self.current_time >= self.time_horizon
-        info = {}
+        info = {'nfe_forward': nfe_forward}
 
         return observation, reward, terminated, truncated, info
 

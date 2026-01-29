@@ -34,6 +34,7 @@ class ODE(ABC):
         """
         self.differentiable_params = differentiable_params
         self.fixed_params = fixed_params
+        self.nfe = 0  # Number of Function Evaluations counter
 
     def set_parameters(self, differentiable_params: torch.Tensor):
         """Update differentiable parameters.
@@ -95,6 +96,9 @@ class ODE(ABC):
         Returns:
             dx/dt tensor
         """
+        # Increment NFE counter (counts solver calls to this function)
+        self.nfe += 1
+
         # Use provided params or fall back to instance params
         diff_params = (
             differentiable_params
