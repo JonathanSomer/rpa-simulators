@@ -115,35 +115,33 @@ class AB(ODE):
 class ABControlled(ODE):
     """Controlled integral feedback model with two variables.
 
-    This is a controlled version of the AB model where the alpha parameters
-    (formerly differentiable) are now fixed but modulated by control inputs.
+    Simple controlled version with single control input and single parameter.
 
     Equations:
-        dA/dt = alpha1*u[0] + alpha2*u[1]*A + alpha3*u[2]*B
-        dB/dt = beta1*A - beta2*B
+        dA/dt = u*alpha*(1-B)
+        dB/dt = A - B
 
-    Each control input u[i] acts as a multiplier on the corresponding alpha
-    parameter, allowing dynamic modulation of the system behavior.
+    The control u modulates the production rate of A, which depends on
+    the depletion of B (1-B term).
 
     Parameters:
-        fixed_params: [alpha1, alpha2, alpha3, beta1, beta2]
+        fixed_params: [alpha] - production rate parameter
 
     Default parameters:
-        alpha1 = 1, alpha2 = 0, alpha3 = -1/4
-        beta1 = 4, beta2 = 1
+        alpha = 1.0
 
     Control:
-        u: [u0, u1, u2] - control inputs multiplying alpha1, alpha2, alpha3
-        When u = [1, 1, 1], behavior matches the original AB system
+        u: scalar control input modulating A production
+        When u = 1, production is at nominal rate
 
     State:
         x: [A, B]
     """
 
-    name = "AB Controlled (Integral Feedback)"
+    name = "AB Controlled (Single Input)"
     variable_names = ["A", "B"]
     differentiable_param_names = []
-    fixed_param_names = ["alpha1", "alpha2", "alpha3", "beta1", "beta2"]
+    fixed_param_names = ["alpha"]
 
     def __init__(
         self,
@@ -152,11 +150,10 @@ class ABControlled(ODE):
         """Initialize ABControlled ODE with parameters.
 
         Args:
-            fixed_params: [alpha1, alpha2, alpha3, beta1, beta2].
-                         Defaults to [1, 0, -1/4, 4, 1]
+            fixed_params: [alpha]. Defaults to [1.0]
         """
         if fixed_params is None:
-            fixed_params = torch.tensor([1.0, 0.0, -1/4, 4.0, 1.0])
+            fixed_params = torch.tensor([1.0])
 
         super().__init__(
             differentiable_params=None,
@@ -177,53 +174,50 @@ class ABControlled(ODE):
             t: Time tensor (unused in this system)
             x: State tensor [A, B]
             differentiable_params: Not used (all params are fixed)
-            fixed_params: [alpha1, alpha2, alpha3, beta1, beta2]
-            control: Control input tensor [u0, u1, u2] multiplying alpha params.
-                    Defaults to [1, 1, 1] if not provided (matches original AB).
+            fixed_params: [alpha] - production rate parameter
+            control: Scalar control input u (or tensor with single element).
+                    Defaults to 1.0 if not provided.
 
         Returns:
             dx/dt tensor [dA/dt, dB/dt]
         """
         assert fixed_params is not None, "Fixed params required"
-        assert len(fixed_params) == 5, "Expected 5 fixed params [alpha1, alpha2, alpha3, beta1, beta2]"
+        assert len(fixed_params) == 1, "Expected 1 fixed param [alpha]"
         assert len(x) == 2, "Expected state [A, B]"
 
         # Unpack state
         A = x[0]
         B = x[1]
 
-        # Unpack parameters
-        alpha1, alpha2, alpha3, beta1, beta2 = fixed_params
+        # Unpack parameter
+        alpha = fixed_params[0]
 
-        # Extract control inputs (default to [1, 1, 1] if not provided)
+        # Extract control input (default to 1.0 if not provided)
         if control is not None:
-            assert len(control) >= 3, "Expected at least 3 control inputs [u0, u1, u2]"
-            u0, u1, u2 = control[0], control[1], control[2]
+            if isinstance(control, torch.Tensor):
+                u = control[0] if len(control) > 0 else control
+            else:
+                u = control
         else:
-            u0 = torch.tensor(1.0)
-            u1 = torch.tensor(1.0)
-            u2 = torch.tensor(1.0)
+            u = torch.tensor(1.0)
 
-        # Compute derivatives with control-modulated alpha parameters
-        dA_dt = alpha1 * u0 + alpha2 * u1 * A + alpha3 * u2 * B
-        dB_dt = beta1 * A - beta2 * B
+        # Compute derivatives
+        dA_dt = u * alpha * (1.0 - B)
+        dB_dt = A - B
 
         return torch.stack([dA_dt, dB_dt])
 
     def __str__(self) -> str:
         """Return string representation with equations and parameters."""
-        alpha1, alpha2, alpha3, beta1, beta2 = self.fixed_params
+        alpha = self.fixed_params[0]
 
         return (
             f"{self.name}\n\n"
             f"Equations:\n"
-            f"  dA/dt = {alpha1:.2f}*u[0] + {alpha2:.2f}*u[1]*A + {alpha3:.2f}*u[2]*B\n"
-            f"  dB/dt = {beta1:.2f}*A - {beta2:.2f}*B\n"
+            f"  dA/dt = u * {alpha:.2f} * (1 - B)\n"
+            f"  dB/dt = A - B\n"
             f"Parameters:\n"
-            f"  alpha1 = {alpha1:.2f}, alpha2 = {alpha2:.2f}, alpha3 = {alpha3:.2f}\n"
-            f"  beta1 = {beta1:.2f}, beta2 = {beta2:.2f}\n"
+            f"  alpha = {alpha:.2f}\n"
             f"Control:\n"
-            f"  u[0]: multiplier for alpha1 term\n"
-            f"  u[1]: multiplier for alpha2*A term\n"
-            f"  u[2]: multiplier for alpha3*B term"
+            f"  u: scalar input modulating A production"
         )
