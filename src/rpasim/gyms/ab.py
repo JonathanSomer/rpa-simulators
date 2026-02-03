@@ -1,18 +1,23 @@
 import copy
 from typing import Callable, Optional, Tuple, Union, List
 
+import gymnasium
+from gymnasium import spaces
+import numpy as np
 import torch
 
 from rpasim.env import DifferentiableEnv
 from rpasim.ode.rpa.ab import ABControlled
 
 
-class ABGym:
-    """Gymnasium-style wrapper for the ABControlled ODE.
+class ABGym(gymnasium.Env):
+    """Gymnasium environment wrapping the ABControlled ODE.
 
     Action space: scalar u in [action_low, action_high].
     Each step copies the base ODE, sets alpha <- u * base_alpha,
     and advances the DifferentiableEnv by dt.
+
+    Observation space: [A, B] state vector (float32).
     """
 
     def __init__(
@@ -28,12 +33,22 @@ class ABGym:
         state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
         initial_state_range: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     ):
+        super().__init__()
+
         assert action_low < action_high, "action_low must be less than action_high"
         reward_dt = time_horizon / n_reward_steps
         assert reward_dt < dt, (
             f"Reward grid spacing ({reward_dt:.4f}) must be smaller than dt ({dt}). "
             f"Increase n_reward_steps (currently {n_reward_steps}) so that "
             f"multiple reward samples fall within each dt step."
+        )
+
+        self.observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32,
+        )
+        self.action_space = spaces.Box(
+            low=np.float32(action_low), high=np.float32(action_high),
+            shape=(1,), dtype=np.float32,
         )
 
         self.base_ode = ABControlled(fixed_params=torch.tensor([alpha]))
@@ -63,39 +78,42 @@ class ABGym:
         """Reset the environment.
 
         Returns:
-            state: current state tensor [A, B]
+            obs: numpy array [A, B] (float32)
             info: dict
         """
+        super().reset(seed=seed, options=options)
         (ode, state), info = self.env.reset(seed=seed, options=options)
-        return state, info
+        return state.detach().cpu().numpy().astype(np.float32), info
 
-    def step(self, u: float):
-        """Take one step with action u.
+    def step(self, action: np.ndarray):
+        """Take one step with action.
 
         Args:
-            u: control input in [action_low, action_high]
+            action: numpy array of shape (1,) with u in [action_low, action_high]
 
         Returns:
-            state: new state tensor [A, B]
-            reward: scalar reward
+            obs: numpy array [A, B] (float32)
+            reward: float
             terminated: bool
             truncated: bool
             info: dict
         """
-        assert (
-            self.action_low <= u <= self.action_high
-        ), f"Action u={u} out of range [{self.action_low}, {self.action_high}]"
+        u = float(action[0])
+        u = np.clip(u, self.action_low, self.action_high)
 
         new_ode = self._make_ode(u)
-        action = (new_ode, self.dt)
-        (ode, state), reward, terminated, truncated, info = self.env.step(action)
-        return state, reward, terminated, truncated, info
+        env_action = (new_ode, self.dt)
+        (ode, state), reward, terminated, truncated, info = self.env.step(env_action)
+
+        obs = state.detach().cpu().numpy().astype(np.float32)
+        reward = float(reward)
+        return obs, reward, terminated, truncated, info
 
     def get_trajectory(self):
         """Get the full trajectory so far.
 
         Returns:
-            times, states, rewards tensors
+            times, states, rewards tensors (torch)
         """
         return self.env.get_trajectory()
 
