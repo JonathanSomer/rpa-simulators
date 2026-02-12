@@ -82,6 +82,7 @@ class DifferentiableEnv:
         n_reward_steps: int = 1000,
         state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
         initial_state_range: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+        ode_method: str = "dopri5",
     ):
         """Initialize the differentiable environment.
 
@@ -98,6 +99,7 @@ class DifferentiableEnv:
                 - Single tuple (lower, upper) applied to all state variables
                 - List of tuples, one per state variable
                 If provided, initial_state will be sampled uniformly from this range on each reset.
+            ode_method: Integration method for torchdiffeq (e.g. "dopri5", "rk4", "euler").
         """
         self.initial_ode = initial_ode
         self.reward_fn = reward_fn
@@ -131,6 +133,7 @@ class DifferentiableEnv:
         self.time_horizon = time_horizon
         self.n_reward_steps = n_reward_steps
         self.reward_dt = time_horizon / n_reward_steps
+        self.ode_method = ode_method
         self.state_limits = _process_state_limits(state_limits, len(initial_state))
 
         # Precompute reward grid
@@ -223,7 +226,7 @@ class DifferentiableEnv:
 
         try:
             # Try regular odeint first (most efficient path)
-            traj = odeint(self.current_ode, self.current_state, t, method="dopri5")
+            traj = odeint(self.current_ode, self.current_state, t, method=self.ode_method)
             nfe_forward = self.current_ode.nfe
 
             # Check for state limit violations on the grid

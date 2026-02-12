@@ -32,6 +32,7 @@ class ABGym(gymnasium.Env):
         alpha: float = 50.0,
         state_limits: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
         initial_state_range: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+        ode_method: str = "dopri5",
     ):
         super().__init__()
 
@@ -66,6 +67,7 @@ class ABGym(gymnasium.Env):
             n_reward_steps=n_reward_steps,
             state_limits=state_limits,
             initial_state_range=initial_state_range,
+            ode_method=ode_method,
         )
 
     def _make_ode(self, u: float) -> ABControlled:
