@@ -77,15 +77,15 @@ class HPA(ODE):
             # Default parameters (time unit: days)
             # Converted from 1/min to 1/day where needed
             fixed_params = torch.tensor([
-                np.log(2) / 4 * 24 * 60,    # gamma_x1: ~249.5 1/day (from 0.17 1/min)
-                np.log(2) / 20 * 24 * 60,   # gamma_x2: ~49.9 1/day (from 0.035 1/min)
-                np.log(2) / 80 * 24 * 60,   # gamma_x3: ~12.5 1/day (from 0.0086 1/min)
-                np.log(2) / 20,              # gamma_P: ~0.035 1/day
-                np.log(2) / 30,              # gamma_A: ~0.023 1/day
-                4.0,                         # KGR
-                3.0,                         # nGR
-                1e6,                         # KP (large = no carrying capacity)
-                1e6,                         # KA (large = no carrying capacity)
+                (np.log(2) / 4) * 24 * 60,    # gamma_x1: ~249.5 1/day (from 0.17 1/min)
+                (np.log(2) / 20) * 24 * 60,   # gamma_x2: ~49.9 1/day (from 0.035 1/min)
+                (np.log(2) / 80) * 24 * 60,   # gamma_x3: ~12.5 1/day (from 0.0086 1/min)
+                (np.log(2) / 20),             # gamma_P: ~0.035 1/day
+                (np.log(2) / 30),             # gamma_A: ~0.023 1/day
+                4.0,                          # KGR
+                3,                            # nGR
+                1e6,                          # KP (large = no carrying capacity)
+                1e6,                          # KA (large = no carrying capacity)
             ], dtype=torch.float32)
 
         super().__init__(differentiable_params=None, fixed_params=fixed_params)
@@ -155,19 +155,19 @@ class HPA(ODE):
         x3_eff = C3 * x3
 
         # Compute derivatives (from paper equations)
-        # dx1 = gamma_x1 * (I1 * u * MR(C3*x3) * GR(C3*x3) - A1 * x1)
+        # dx1_dt = I1 * b1 * GR(C3 * x3) * MR(C3 * x3) * u - A1 * a1 * x1
         dx1_dt = gamma_x1 * (I1 * u * MR(x3_eff) * GR(x3_eff) - A1 * x1)
 
-        # dx2 = gamma_x2 * (I2 * (C1*x1) * P * GR(C3*x3) - A2 * x2)
+        # dx2_dt = I2 * b2 * C1 * x1 * GR(C3 * x3) * P - A2 * a2 * x2
         dx2_dt = gamma_x2 * (I2 * (C1 * x1) * P * GR(x3_eff) - A2 * x2)
 
-        # dx3 = gamma_x3 * (I3 * (C2*x2) * A - A3 * x3)
+        # dx3_dt = I3 * b3 * C2 * x2 * A - A3 * a3 * x3
         dx3_dt = gamma_x3 * (I3 * (C2 * x2) * A - A3 * x3)
 
-        # dP = gamma_P * P * ((C1*x1) * (1 - P/KP) - 1)
+        # dP_dt = P * (bP * C1 * x1 - aP)        
         dP_dt = gamma_P * P * ((C1 * x1) * (1.0 - P / KP) - 1.0)
 
-        # dA = gamma_A * A * ((C2*x2) * (1 - A/KA) - 1)
+        # dA_dt = A * (bA * C2 * x2 - aA)
         dA_dt = gamma_A * A * ((C2 * x2) * (1.0 - A / KA) - 1.0)
 
         return torch.stack([dx1_dt, dx2_dt, dx3_dt, dP_dt, dA_dt])
