@@ -49,6 +49,7 @@ class HPA(ODE):
         A1, A2, A3: Neutralizing antibodies for CRH, ACTH, Cortisol [1, ∞)
 
     Control vector order: [I1, I2, I3, C1, C2, C3, A1, A2, A3]
+    Control inputs not in cortisol steady-state: I2, I3, C2, A2, A3
     """
 
     name = "HPA Axis (Stress Response)"
